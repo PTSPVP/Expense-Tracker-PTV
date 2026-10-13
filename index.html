@@ -51,6 +51,10 @@ button.main{background:var(--acc);color:var(--bg);border-color:var(--acc);font-w
 label.sw{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 label.sw input{width:auto}
 .row[hidden]{display:none}
+body.bk{background:#f8d9d3}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) body.bk{background:#3d1a14}}
+.banner.bkb{background:#b3261e;color:#fff}
+.bkb button{margin-top:8px;background:#fff;color:#7a1510;border:0;font-weight:600}
 .seg.neu button.on{background:var(--acc);color:var(--bg)}
 .bi{fill:var(--in)}.bo{fill:var(--out)}.ax{stroke:var(--line)}.lb{fill:var(--mute);font-size:11px;font-family:inherit}
 .legend{display:flex;gap:14px;font-size:13px;color:var(--mute);margin-top:6px}
@@ -63,6 +67,7 @@ label.sw input{width:auto}
 <main>
 <h1>สมุดรายรับรายจ่าย</h1>
 
+<div class="banner bkb" id="bkBanner"><span id="bkTxt"></span><br><button id="bkNow" type="button">สำรองข้อมูลตอนนี้</button></div>
 <div class="banner" id="banner">วันนี้ยังไม่ได้จดรายการเลย — จดสักรายการก่อนนอนนะ</div>
 
 <section class="card">
@@ -106,6 +111,15 @@ label.sw input{width:auto}
 </section>
 
 <section class="card">
+  <h2>เตือนสำรองข้อมูลวันเงินเดือนออก</h2>
+  <label class="sw">เงินเดือนออกวันที่ <input type="number" id="payDay" min="1" max="31" style="width:80px"> ของทุกเดือน</label>
+  <p class="note" id="payInfo" style="margin-top:0"></p>
+  <p class="note">ถ้าตรงวันเสาร์ อาทิตย์ หรือวันหยุด จะเลื่อนเป็นวันทำการก่อนหน้า วันหยุดที่วันที่ตายตัว (เช่น 12 ส.ค. 23 ต.ค.) ระบบรู้อยู่แล้ว ส่วนวันหยุดที่เปลี่ยนทุกปี (เช่น วันพระใหญ่ วันหยุดชดเชย) ให้เพิ่มเองตรงนี้</p>
+  <div class="row"><input id="holDate" type="date" aria-label="วันหยุดเพิ่มเติม"><button id="holAdd" type="button">เพิ่มวันหยุด</button></div>
+  <div class="btns" id="holList"></div>
+</section>
+
+<section class="card">
   <h2>ข้อมูลของคุณ</h2>
   <p class="note" style="margin-top:0">ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ส่งไปไหน ควรกดสำรองเป็นระยะ</p>
   <div class="btns">
@@ -120,7 +134,7 @@ label.sw input{width:auto}
 <script>
 (function(){
 var KEY="ledger-v1",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ","อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
-var S={tx:[],cats:{out:[],inc:[]},rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
+var S={tx:[],cats:{out:[],inc:[]},payDay:25,hol:[],lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
 function load(){try{var r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 var $=function(i){return document.getElementById(i)};
@@ -189,18 +203,33 @@ function ics(){var t=(S.rTime||"21:00").split(":"),d=new Date(),p=function(n){re
   var day=d.getFullYear()+p(d.getMonth()+1)+p(d.getDate());
   var s=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ledger//TH","BEGIN:VEVENT","UID:ledger-daily@local","DTSTAMP:"+day+"T000000Z","DTSTART:"+day+"T"+t[0]+t[1]+"00","DURATION:PT10M","RRULE:FREQ=DAILY","SUMMARY:จดรายรับรายจ่ายวันนี้","BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:จดรายรับรายจ่ายวันนี้","TRIGGER:PT0S","END:VALARM","END:VEVENT","END:VCALENDAR"];
   download("เตือนจดรายจ่าย.ics",s.join("\r\n"),"text/calendar")}
-function notify(){
+function notify(msg,tag){
   if(!("Notification" in window)||Notification.permission!=="granted")return;
-  var t="สมุดรายรับรายจ่าย",o={body:"วันนี้ยังไม่ได้จดรายการ จดสักรายการก่อนนอนนะ",icon:"icon-192.png",tag:"daily"};
+  var t="สมุดรายรับรายจ่าย",o={body:msg,icon:"icon-192.png",tag:tag};
   var fb=function(){try{new Notification(t,o)}catch(e){}};
   if(navigator.serviceWorker&&navigator.serviceWorker.ready)navigator.serviceWorker.ready.then(function(r){return r.showNotification(t,o)}).catch(fb);else fb();
 }
+var HOL=["01-01","04-06","04-13","04-14","04-15","05-01","05-04","06-03","07-28","08-12","10-13","10-23","12-05","12-10","12-31"];
+function offDay(d){var w=d.getDay(),s=iso(d);return w===0||w===6||HOL.indexOf(s.slice(5))>=0||(S.hol||[]).indexOf(s)>=0}
+function payday(y,m){var dim=new Date(y,m+1,0).getDate(),d=new Date(y,m,Math.min(S.payDay||25,dim));while(offDay(d))d.setDate(d.getDate()-1);return d}
+function lastPay(){var n=new Date(),p=payday(n.getFullYear(),n.getMonth());if(iso(n)<iso(p))p=payday(n.getFullYear(),n.getMonth()-1);return p}
+function fmt(d){return d.toLocaleDateString("th-TH",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+function bkRender(){var n=new Date(),p=payday(n.getFullYear(),n.getMonth()),lp=lastPay(),ls=iso(lp);
+  var due=S.tx.length>0&&(!S.lastBackup||S.lastBackup<ls);
+  document.body.classList.toggle("bk",due);$("bkBanner").className="banner bkb"+(due?" show":"");
+  $("bkTxt").textContent="เงินเดือนออกแล้ว ("+fmt(lp)+") แต่ยังไม่ได้สำรองข้อมูล";
+  $("payInfo").textContent="เงินเดือนเดือนนี้ออก: "+fmt(p)+". สำรองข้อมูลล่าสุด: "+(S.lastBackup?fmt(new Date(S.lastBackup+"T00:00")):"ยังไม่เคย");
+  return due}
+function holRender(){var b=$("holList");b.innerHTML="";(S.hol||[]).slice().sort().forEach(function(h){var s=document.createElement("button");s.type="button";
+  s.textContent=new Date(h+"T00:00").toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})+" ✕";
+  s.onclick=function(){S.hol=S.hol.filter(function(x){return x!==h});save();holRender();bkRender()};b.appendChild(s)})}
 function check(){
   var today=iso(new Date()),logged=S.tx.some(function(t){return t.date===today});
   var now=new Date(),hm=("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2);
   var due=S.rOn&&!logged&&hm>=S.rTime;
   $("banner").className="banner"+(due?" show":"");
-  if(due&&S.last!==today){S.last=today;save();notify()}
+  if(due&&S.last!==today){S.last=today;save();notify("วันนี้ยังไม่ได้จดรายการ จดสักรายการก่อนนอนนะ","daily")}
+  var bd=bkRender();if(bd&&S.rOn&&S.bkNote!==today){S.bkNote=today;save();notify("เงินเดือนออกแล้ว อย่าลืมกดสำรองข้อมูล","backup")}
 }
 $("tOut").onclick=function(){setType("out")};$("tIn").onclick=function(){setType("in")};
 $("add").onclick=add;$("cat").onchange=function(){toggleNew();if(!$("ncRow").hidden)$("newcat").focus()};
@@ -212,11 +241,14 @@ $("rTime").onchange=function(){S.rTime=this.value||"21:00";save();check()};
 $("rPerm").onclick=function(){if(!("Notification"in window)){alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน ใช้ปุ่มเพิ่มลงปฏิทินแทนได้");return}
   Notification.requestPermission().then(function(p){alert(p==="granted"?"เปิดการแจ้งเตือนแล้ว":"ยังไม่ได้รับอนุญาต ลองตรวจสอบการตั้งค่าเว็บไซต์ในเบราว์เซอร์")})};
 $("rIcs").onclick=ics;$("exCsv").onclick=csv;
-$("exJson").onclick=function(){download("สำรองรายรับรายจ่าย-"+iso(new Date())+".json",JSON.stringify(S),"application/json")};
+function backup(){S.lastBackup=iso(new Date());save();download("สำรองรายรับรายจ่าย-"+iso(new Date())+".json",JSON.stringify(S),"application/json");bkRender()}
+$("exJson").onclick=backup;$("bkNow").onclick=backup;
+$("payDay").onchange=function(){var v=parseInt(this.value,10);S.payDay=v>=1&&v<=31?v:25;this.value=S.payDay;save();bkRender()};
+$("holAdd").onclick=function(){var v=$("holDate").value;if(!v)return;if(!S.hol)S.hol=[];if(S.hol.indexOf(v)<0)S.hol.push(v);$("holDate").value="";save();holRender();bkRender()};
 $("imBtn").onclick=function(){$("imFile").click()};
 $("imFile").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();
   r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.tx))throw 0;if(confirm("นำเข้า "+d.tx.length+" รายการ? ข้อมูลปัจจุบันจะถูกแทนที่")){S=Object.assign(S,d);save();init()}}catch(e){alert("ไฟล์สำรองไม่ถูกต้อง")}};r.readAsText(f);this.value=""};
-function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());fillCats();render();check()}
+function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());$("payDay").value=S.payDay||25;holRender();fillCats();render();check()}
 function route(){var p=new URLSearchParams(location.search),a=p.get("add");
   if(a==="out"||a==="in"){setType(a);$("amt").scrollIntoView({block:"center"});$("amt").focus()}
   else if(p.get("view")==="chart")$("csvg").scrollIntoView({block:"center"})}
