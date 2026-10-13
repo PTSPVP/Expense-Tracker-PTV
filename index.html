@@ -60,6 +60,9 @@ body.bk{background:#f8d9d3}
 .legend{display:flex;gap:14px;font-size:13px;color:var(--mute);margin-top:6px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
 .legend .bi{background:var(--in)}.legend .bo{background:var(--out)}
+.cr{margin:12px 0}.cr>div:first-child{display:flex;justify-content:space-between;gap:8px}
+.cb{height:8px;border-radius:4px;background:var(--line);margin-top:4px;overflow:hidden}
+.cb i{display:block;height:100%}.cb i.o{background:var(--out)}.cb i.i{background:var(--in)}
 @media (prefers-reduced-motion:no-preference){.banner.show{animation:d .3s}@keyframes d{from{opacity:0;transform:translateY(-6px)}}}
 </style>
 </head>
@@ -96,6 +99,12 @@ body.bk{background:#f8d9d3}
   <svg id="csvg" viewBox="0 0 560 220" role="img" aria-label="แผนภูมิแท่งรายรับและรายจ่าย" style="width:100%;height:auto;display:block"></svg>
   <div class="legend"><span><i class="bi"></i>รายรับ</span><span><i class="bo"></i>รายจ่าย</span></div>
   <p class="note" id="csum"></p>
+</section>
+
+<section class="card">
+  <h2>สรุปตามหมวดหมู่ <span id="ctitle" style="font-weight:400;color:var(--mute)"></span></h2>
+  <div class="seg neu" id="kmode" role="group" aria-label="ประเภท"><button type="button" data-k="out">รายจ่าย</button><button type="button" data-k="in">รายรับ</button></div>
+  <div id="cats"></div>
 </section>
 
 <section class="card" id="list"></section>
@@ -166,14 +175,27 @@ function render(){
     var a=r.querySelector(".a");a.className="a "+(t.type==="in"?"i":"o");a.textContent=(t.type==="in"?"+":"−")+baht(t.amt);
     r.querySelector("button").onclick=function(){if(confirm("ลบรายการนี้?")){S.tx=S.tx.filter(function(x){return x.id!==t.id});save();render();check()}};
     box.appendChild(r)});
-  chart();
+  chart();cats();
 }
-var cm="d";
+var cm="d",km="out";
+function cats(){
+  var ym=iso(cur).slice(0,7),m={},tot=0,box=$("cats");
+  S.tx.forEach(function(t){if(t.date.slice(0,7)===ym&&t.type===km){m[t.cat]=(m[t.cat]||0)+t.amt;tot+=t.amt}});
+  box.innerHTML="";
+  var ks=Object.keys(m).sort(function(a,b){return m[b]-m[a]});
+  if(!ks.length)box.innerHTML='<div class="empty">ยังไม่มีรายการในเดือนนี้</div>';
+  ks.forEach(function(k){var r=document.createElement("div"),pc=m[k]/tot*100;r.className="cr";
+    r.innerHTML='<div><span></span><b></b></div><div class="cb"><i></i></div>';
+    r.querySelector("span").textContent=k+" ("+Math.round(pc)+"%)";r.querySelector("b").textContent=baht(m[k]);
+    var i=r.querySelector("i");i.className=km==="out"?"o":"i";i.style.width=pc+"%";box.appendChild(r)});
+  $("ctitle").textContent="· "+cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"});
+  document.querySelectorAll("#kmode button").forEach(function(b){b.className=b.dataset.k===km?"on":""});
+}
 function chart(){
-  var n=new Date(),y=n.getFullYear(),mo=n.getMonth(),d=n.getDate(),b=[],i,s,e;
-  if(cm==="d")for(i=13;i>=0;i--){s=new Date(y,mo,d-i);e=new Date(y,mo,d-i+1);b.push([String(s.getDate()),s,e])}
-  else if(cm==="w"){var wd=(n.getDay()+6)%7;for(i=7;i>=0;i--){s=new Date(y,mo,d-wd-7*i);e=new Date(y,mo,d-wd-7*i+7);b.push([s.getDate()+"/"+(s.getMonth()+1),s,e])}}
-  else if(cm==="m")for(i=11;i>=0;i--){s=new Date(y,mo-i,1);e=new Date(y,mo-i+1,1);b.push([s.toLocaleDateString("th-TH",{month:"short"}),s,e])}
+  var y=cur.getFullYear(),mo=cur.getMonth(),dim=new Date(y,mo+1,0).getDate(),b=[],i,s,e,ml=cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"}),yl=cur.toLocaleDateString("th-TH",{year:"numeric"});
+  if(cm==="d")for(i=1;i<=dim;i++){b.push([String(i),new Date(y,mo,i),new Date(y,mo,i+1)])}
+  else if(cm==="w"){s=1;for(i=1;i<=dim;i++){if(i===dim||new Date(y,mo,i).getDay()===0){b.push([s===i?String(i):s+"-"+i,new Date(y,mo,s),new Date(y,mo,i+1)]);s=i+1}}}
+  else if(cm==="m")for(i=0;i<12;i++){s=new Date(y,i,1);e=new Date(y,i+1,1);b.push([s.toLocaleDateString("th-TH",{month:"short"}),s,e])}
   else for(i=4;i>=0;i--){s=new Date(y-i,0,1);e=new Date(y-i+1,0,1);b.push([s.toLocaleDateString("th-TH",{year:"numeric"}),s,e])}
   var vals=b.map(function(x){var a=iso(x[1]),z=iso(x[2]),r={i:0,o:0};S.tx.forEach(function(t){if(t.date>=a&&t.date<z)r[t.type==="in"?"i":"o"]+=t.amt});return r});
   var mx=1,ti=0,to=0;vals.forEach(function(v){mx=Math.max(mx,v.i,v.o);ti+=v.i;to+=v.o});
@@ -181,9 +203,9 @@ function chart(){
   b.forEach(function(x,k){var cx=pl+k*sl+sl/2,v=vals[k];
     [[v.i,"bi",cx-bw-1,"รายรับ"],[v.o,"bo",cx+1,"รายจ่าย"]].forEach(function(z){var h=z[0]>0?Math.max(2,z[0]/mx*ch):0;
       if(h)g+='<rect class="'+z[1]+'" x="'+z[2].toFixed(1)+'" y="'+(pt+ch-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2"><title>'+x[0]+" "+z[3]+" "+baht(z[0])+'</title></rect>'});
-    g+='<text class="lb" x="'+cx.toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+x[0]+'</text>'});
+    if(b.length<=16||k%2===0)g+='<text class="lb" x="'+cx.toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+x[0]+'</text>'});
   $("csvg").innerHTML='<line class="ax" x1="0" x2="'+W+'" y1="'+(pt+ch)+'" y2="'+(pt+ch)+'"/><text class="lb" x="'+pl+'" y="11">สูงสุด '+baht(mx)+'</text>'+g;
-  $("csum").textContent="รวม"+({d:"14 วันล่าสุด",w:"8 สัปดาห์ล่าสุด",m:"12 เดือนล่าสุด",y:"5 ปีล่าสุด"}[cm])+": รายรับ "+baht(ti)+", รายจ่าย "+baht(to)+", คงเหลือ "+baht(ti-to);
+  $("csum").textContent="รวม"+({d:" "+ml,w:" "+ml,m:" ปี "+yl,y:" 5 ปีถึง "+yl}[cm])+": รายรับ "+baht(ti)+", รายจ่าย "+baht(to)+", คงเหลือ "+baht(ti-to);
   document.querySelectorAll("#cmode button").forEach(function(btn){btn.className=btn.dataset.m===cm?"on":""});
 }
 function add(){
@@ -233,7 +255,8 @@ function check(){
 }
 $("tOut").onclick=function(){setType("out")};$("tIn").onclick=function(){setType("in")};
 $("add").onclick=add;$("cat").onchange=function(){toggleNew();if(!$("ncRow").hidden)$("newcat").focus()};
-document.querySelectorAll("#cmode button").forEach(function(b){b.onclick=function(){cm=b.dataset.m;chart()}});$("amt").onkeydown=function(e){if(e.key==="Enter")add()};
+document.querySelectorAll("#cmode button").forEach(function(b){b.onclick=function(){cm=b.dataset.m;chart()}});
+document.querySelectorAll("#kmode button").forEach(function(b){b.onclick=function(){km=b.dataset.k;cats()}});$("amt").onkeydown=function(e){if(e.key==="Enter")add()};
 $("prev").onclick=function(){cur.setMonth(cur.getMonth()-1);render()};
 $("next").onclick=function(){cur.setMonth(cur.getMonth()+1);render()};
 $("rOn").onchange=function(){S.rOn=this.checked;save();if(S.rOn&&"Notification"in window&&Notification.permission==="default")Notification.requestPermission();check()};
