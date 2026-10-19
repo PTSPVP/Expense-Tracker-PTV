@@ -36,7 +36,8 @@ input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
 button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 14px}
 button.main{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600;width:100%;padding:12px}
 :focus-visible{outline:3px solid #3b82f6;outline-offset:2px}
-.day{font-size:13px;color:var(--mute);margin:14px 0 4px;display:flex;justify-content:space-between}
+.day{font-size:16px;color:var(--ink);margin:16px 0 4px;padding:8px 10px;background:var(--bg);border-left:4px solid var(--acc);border-radius:8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.day span:first-child{font-weight:700}.day span:last-child{font-size:14px;font-weight:600;color:var(--mute);font-variant-numeric:tabular-nums}
 .tx{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
 .tx:last-child{border-bottom:0}
 .tx .t{flex:1;min-width:0}.tx .t small{display:block;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -83,7 +84,7 @@ body.bk{background:#f8d9d3}
   <div id="cardp" hidden>
     <p class="note" id="cardInfo"></p>
     <label class="sw">วันตัดยอดบัตรวันที่ <input type="number" id="stDay" min="1" max="31" style="width:80px"> ของทุกเดือน</label>
-    <p class="note">รายจ่ายที่รูดบัตรให้จดเป็นหมวด "บัตรเครดิต" รายการวันที่ตัดยอดจะนับเข้ารอบบิลใหม่</p>
+    <p class="note">รายจ่ายที่รูดบัตรให้จดเป็นหมวด "Credit Card" รายการวันที่ตัดยอดจะนับเข้ารอบบิลใหม่</p>
   </div>
   <div id="cyc" hidden>
     <p class="note" id="cycInfo"></p>
@@ -158,7 +159,7 @@ body.bk{background:#f8d9d3}
 
 <script>
 (function(){
-var KEY="ledger-v1",CC="บัตรเครดิต",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
+var KEY="ledger-v1",CC="Credit Card",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
 var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
 function load(){try{var r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -184,7 +185,7 @@ function render(){
   items.forEach(function(t){
     if(t.date!==lastD){lastD=t.date;var d=document.createElement("div");d.className="day";
       var tot=items.filter(function(x){return x.date===t.date}).reduce(function(a,x){return a+(x.type==="in"?x.amt:-x.amt)},0);
-      d.innerHTML="<span></span><span></span>";d.children[0].textContent=new Date(t.date+"T00:00").toLocaleDateString("th-TH",{weekday:"short",day:"numeric",month:"short"});d.children[1].textContent=baht(tot);box.appendChild(d)}
+      d.innerHTML="<span></span><span></span>";d.children[0].textContent=new Date(t.date+"T00:00").toLocaleDateString("th-TH",{weekday:"long",day:"numeric",month:"short"});d.children[1].textContent=baht(tot);box.appendChild(d)}
     var r=document.createElement("div");r.className="tx";
     r.innerHTML='<div class="t"><span></span><small></small></div><span class="a"></span><button type="button" aria-label="ลบรายการ">✕</button>';
     r.querySelector(".t span").textContent=t.cat;r.querySelector("small").textContent=t.note||"";
