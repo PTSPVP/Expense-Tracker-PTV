@@ -84,7 +84,7 @@ body.bk{background:#f8d9d3}
   <div id="cardp" hidden>
     <p class="note" id="cardInfo"></p>
     <label class="sw">วันตัดยอดบัตรวันที่ <input type="number" id="stDay" min="1" max="31" style="width:80px"> ของทุกเดือน</label>
-    <p class="note">รายจ่ายที่รูดบัตรให้จดเป็นหมวด "Credit Card" รายการวันที่ตัดยอดจะนับเข้ารอบบิลใหม่</p>
+    <p class="note">รายจ่ายที่รูดบัตรให้จดเป็นหมวด "Credit Card" รายการวันที่ตัดยอดจะนับเข้ารอบบิลใหม่ รายรับหมวดที่มีคำว่า Cashback จะถูกหักออกจากยอดในรอบบิลนั้นให้เอง</p>
   </div>
   <div id="cyc" hidden>
     <p class="note" id="cycInfo"></p>
@@ -175,7 +175,7 @@ function setType(t){type=t;$("tOut").className="o"+(t==="out"?" on":"");$("tIn")
 function render(){
   var r0=rng();
   $("mlabel").textContent=cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"});
-  var items=S.tx.filter(function(t){return t.date>=r0[0]&&t.date<r0[1]&&(S.view!=="b"||(t.type==="out"&&t.cat===CC))}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
+  var items=S.tx.filter(function(t){return t.date>=r0[0]&&t.date<r0[1]&&(S.view!=="b"||(t.type==="out"&&t.cat===CC)||(t.type==="in"&&/cashback/i.test(t.cat)))}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
   var si=0,so=0;items.forEach(function(t){t.type==="in"?si+=t.amt:so+=t.amt});
   $("bal").textContent=baht(si-so);$("sin").textContent=baht(si);$("sout").textContent=baht(so);cycRender();
   var box=$("list");box.innerHTML="";
@@ -212,17 +212,18 @@ function cycMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth();return new
 function stDate(y,m){var dim=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(S.stDay||17,dim))}
 function cardMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth();return new Date(y,iso(n)<iso(stDate(y,m))?m:m+1,1)}
 function cardRender(){
-  var y=cur.getFullYear(),m=cur.getMonth(),f=stDate(y,m-1),t=stDate(y,m),a=iso(f),b=iso(t),pa=iso(stDate(y,m-2)),n=0,tot=0,pv=0,
+  var y=cur.getFullYear(),m=cur.getMonth(),f=stDate(y,m-1),t=stDate(y,m),a=iso(f),b=iso(t),pa=iso(stDate(y,m-2)),n=0,tot=0,pv=0,cb=0,pcb=0,
     ds=function(d){return d.toLocaleDateString("th-TH",{day:"numeric",month:"short"})},td=new Date(iso(new Date())+"T00:00");
-  S.tx.forEach(function(x){if(x.type==="out"&&x.cat===CC){if(x.date>=a&&x.date<b){n++;tot+=x.amt}else if(x.date>=pa&&x.date<a)pv+=x.amt}});
+  S.tx.forEach(function(x){var ok=x.type==="out"&&x.cat===CC,k=x.type==="in"&&/cashback/i.test(x.cat);if(!ok&&!k)return;
+    var now=x.date>=a&&x.date<b,pr=x.date>=pa&&x.date<a;if(ok){if(now){n++;tot+=x.amt}else if(pr)pv+=x.amt}else{if(now)cb+=x.amt;else if(pr)pcb+=x.amt}});
   $("mlabel").textContent="รอบบิล "+ds(f)+" – "+ds(new Date(t.getTime()-864e5));
-  $("bal").textContent=baht(tot);
-  $("cardInfo").textContent=n+" รายการ ตัดยอดวันที่ "+ds(t)+(td>=f&&td<t?" (อีก "+Math.round((t-td)/864e5)+" วัน)":td>=t?" (ตัดยอดแล้ว)":"")+" รอบบิลก่อนหน้า "+baht(pv)}
+  $("bal").textContent=baht(tot-cb);
+  $("cardInfo").textContent=n+" รายการ ใช้จ่ายบัตร "+baht(tot)+(cb?" − Cashback "+baht(cb)+" = สุทธิ "+baht(tot-cb):"")+" ตัดยอดวันที่ "+ds(t)+(td>=f&&td<t?" (อีก "+Math.round((t-td)/864e5)+" วัน)":td>=t?" (ตัดยอดแล้ว)":"")+" รอบบิลก่อนหน้า (สุทธิ) "+baht(pv-pcb)}
 function setView(v){S.view=v;save();var n=new Date();cur=v==="c"?cycMonth():v==="b"?cardMonth():new Date(n.getFullYear(),n.getMonth(),1);render();if(v==="b"){setType("out");$("cat").value=CC}}
 function cycRender(){
   var cv=S.view==="c",cb=S.view==="b";$("cyc").hidden=!cv;$("cardp").hidden=!cb;document.querySelector(".split").hidden=cb;$("catCard").hidden=cb;
   document.querySelectorAll("#vmode button").forEach(function(b){b.className=b.dataset.v===S.view?"on":""});
-  $("balLbl").textContent=cb?"ยอดบัตรเครดิตในรอบบิลนี้":cv?"เงินคงเหลือในรอบนี้":"ยอดคงเหลือเดือนนี้";
+  $("balLbl").textContent=cb?"ยอดบัตรเครดิตสุทธิในรอบบิลนี้ (หัก Cashback)":cv?"เงินคงเหลือในรอบนี้":"ยอดคงเหลือเดือนนี้";
   if(cb)return cardRender();
   if(!cv)return;
   var y=cur.getFullYear(),m=cur.getMonth(),c=cyc(y,m),tot=c.carry+c.sal+c.oth,end=new Date(c.to.getTime()-864e5),pc=tot>0?Math.round(c.out/tot*100):0,
