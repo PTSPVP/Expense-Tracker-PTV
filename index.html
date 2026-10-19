@@ -93,6 +93,8 @@ body.bk{background:#f8d9d3}
     <p class="note" style="margin-bottom:6px">เงินที่เหลือในรอบนี้:</p>
     <div class="seg neu" id="dmode" role="group" aria-label="เงินที่เหลือ"><button type="button" data-d="carry">ยกยอดไปรอบหน้า</button><button type="button" data-d="save">เข้าเงินเก็บ</button></div>
     <p class="note" id="saveTot"></p>
+    <label class="sw">เริ่มนับรอบเงินเดือนตั้งแต่วันที่ <input type="date" id="startD" style="width:auto"></label>
+    <p class="note">ข้อมูลก่อนวันนี้ยังดูได้ในมุมมองเดือนปฏิทิน แต่ไม่นำมาคำนวณในรอบเงินเดือน (ลบวันที่ออกถ้าอยากนับทั้งหมด)</p>
   </div>
 </section>
 
@@ -160,7 +162,7 @@ body.bk{background:#f8d9d3}
 <script>
 (function(){
 var KEY="ledger-v1",CC="Credit Card",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
-var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
+var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,startDate:"2026-10-22",hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
 function load(){try{var r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 var $=function(i){return document.getElementById(i)};
@@ -201,13 +203,16 @@ function startOf(y,m){var p=payday(y,m),best=null;
   return best?new Date(best+"T00:00"):p}
 function dec(y,m){var k=iso(new Date(y,m,1)).slice(0,7);return (S.cyc&&S.cyc[k])||"carry"}
 function cyc(y,m,dep){dep=dep||0;
-  var f=startOf(y,m-1),t=startOf(y,m),a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,carry:0,from:f,to:t};
+  var f=startOf(y,m-1),t=startOf(y,m),sd=S.startDate||"",a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,carry:0,from:f,to:t,pre:false};
+  if(sd&&b<=sd){r.pre=true;r.rem=0;return r}
+  if(sd&&a<sd){a=sd;r.from=new Date(sd+"T00:00")}
   S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out")r.out+=x.amt;else if(x.cat==="เงินเดือน")r.sal+=x.amt;else r.oth+=x.amt}});
   var first=S.tx.reduce(function(z,x){return !z||x.date<z?x.date:z},"");
-  if(first&&a>first&&dep<36){var q=cyc(y,m-1,dep+1);r.carry=dec(y,m-1)==="save"?Math.min(0,q.rem):q.rem}
+  var lim=first>sd?first:sd;
+  if(first&&a>lim&&dep<36){var q=cyc(y,m-1,dep+1);r.carry=dec(y,m-1)==="save"?Math.min(0,q.rem):q.rem}
   r.rem=r.carry+r.sal+r.oth-r.out;return r}
-function rng(){var y=cur.getFullYear(),m=cur.getMonth();if(S.view==="b")return [iso(stDate(y,m-1)),iso(stDate(y,m))];if(S.view==="c")return [iso(startOf(y,m-1)),iso(startOf(y,m))];return [iso(cur),iso(new Date(y,m+1,1))]}
-function cycMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth();return new Date(y,iso(n)<iso(startOf(y,m))?m:m+1,1)}
+function rng(){var y=cur.getFullYear(),m=cur.getMonth();if(S.view==="b")return [iso(stDate(y,m-1)),iso(stDate(y,m))];if(S.view==="c"){var f=iso(startOf(y,m-1)),t=iso(startOf(y,m)),sd=S.startDate||"";if(sd&&t<=sd)return ["9","9"];return [f>sd?f:sd,t]}return [iso(cur),iso(new Date(y,m+1,1))]}
+function cycMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth(),mm=iso(n)<iso(startOf(y,m))?m:m+1,sd=S.startDate||"";for(var i=0;sd&&i<12&&iso(startOf(y,mm))<=sd;i++)mm++;return new Date(y,mm,1)}
 /*P2*/
 function stDate(y,m){var dim=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(S.stDay||17,dim))}
 function cardMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth();return new Date(y,iso(n)<iso(stDate(y,m))?m:m+1,1)}
@@ -229,6 +234,7 @@ function cycRender(){
   var y=cur.getFullYear(),m=cur.getMonth(),c=cyc(y,m),tot=c.carry+c.sal+c.oth,end=new Date(c.to.getTime()-864e5),pc=tot>0?Math.round(c.out/tot*100):0,
     ds=function(d){return d.toLocaleDateString("th-TH",{day:"numeric",month:"short"})},td=new Date(iso(new Date())+"T00:00"),msg;
   $("mlabel").textContent="รอบใช้จ่ายเดือน"+cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"})+" ("+ds(c.from)+" – "+ds(end)+")";
+  if(c.pre){$("bal").textContent=baht(0);$("sin").textContent=baht(0);$("sout").textContent=baht(0);$("cycInfo").textContent="รอบนี้อยู่ก่อนวันเริ่มนับ ("+ds(new Date(S.startDate+"T00:00"))+") จึงไม่นำมาคำนวณ";$("cycBar").style.width="0%";$("cycDay").textContent="";return}
   $("bal").textContent=baht(c.rem);$("sin").textContent=baht(c.sal+c.oth);$("sout").textContent=baht(c.out);
   $("cycInfo").textContent="ยอดยกมา "+baht(c.carry)+" + เงินเดือน "+baht(c.sal)+" + รายรับอื่น "+baht(c.oth);
   $("cycBar").style.width=Math.min(100,pc)+"%";
@@ -329,12 +335,13 @@ $("rIcs").onclick=ics;$("exCsv").onclick=csv;
 function backup(){S.lastBackup=iso(new Date());save();download("สำรองรายรับรายจ่าย-"+iso(new Date())+".json",JSON.stringify(S),"application/json");bkRender()}
 $("exJson").onclick=backup;$("bkNow").onclick=backup;
 $("payDay").onchange=function(){var v=parseInt(this.value,10);S.payDay=v>=1&&v<=31?v:25;this.value=S.payDay;save();bkRender()};
+$("startD").onchange=function(){S.startDate=this.value||"";save();if(S.view==="c")cur=cycMonth();render()};
 $("stDay").onchange=function(){var v=parseInt(this.value,10);S.stDay=v>=1&&v<=31?v:17;this.value=S.stDay;save();render()};
 $("holAdd").onclick=function(){var v=$("holDate").value;if(!v)return;if(!S.hol)S.hol=[];if(S.hol.indexOf(v)<0)S.hol.push(v);$("holDate").value="";save();holRender();bkRender()};
 $("imBtn").onclick=function(){$("imFile").click()};
 $("imFile").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();
   r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.tx))throw 0;if(confirm("นำเข้า "+d.tx.length+" รายการ? ข้อมูลปัจจุบันจะถูกแทนที่")){S=Object.assign(S,d);save();init()}}catch(e){alert("ไฟล์สำรองไม่ถูกต้อง")}};r.readAsText(f);this.value=""};
-function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());$("payDay").value=S.payDay||25;$("stDay").value=S.stDay||17;holRender();if(S.view==="c")cur=cycMonth();else if(S.view==="b")cur=cardMonth();fillCats();render();check()}
+function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());$("payDay").value=S.payDay||25;$("stDay").value=S.stDay||17;$("startD").value=S.startDate||"";holRender();if(S.view==="c")cur=cycMonth();else if(S.view==="b")cur=cardMonth();fillCats();render();check()}
 function route(){var p=new URLSearchParams(location.search),a=p.get("add");
   if(a==="out"||a==="in"){setType(a);$("amt").scrollIntoView({block:"center"});$("amt").focus()}
   else if(p.get("view")==="chart")$("csvg").scrollIntoView({block:"center"})}
