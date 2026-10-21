@@ -43,7 +43,7 @@ button.main{background:var(--acc);color:var(--bg);border-color:var(--acc);font-w
 .tx .t{flex:1;min-width:0}.tx .t small{display:block;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tx .a{font-weight:600;font-variant-numeric:tabular-nums}
 .a.i{color:var(--in)}.a.o{color:var(--out)}
-.tx button{border:0;background:none;color:var(--mute);padding:6px 8px}
+.tx button{border:0;background:none;color:var(--mute);padding:8px 10px;font-size:16px}
 .empty{color:var(--mute);text-align:center;padding:18px 0}
 .banner{background:var(--acc);color:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:none}
 .banner.show{display:block}
@@ -83,11 +83,13 @@ body.bk{background:#f8d9d3}
   <div class="split"><div class="i">รายรับ<b id="sin">฿0</b></div><div class="o">รายจ่าย<b id="sout">฿0</b></div></div>
   <div id="cardp" hidden>
     <p class="note" id="cardInfo"></p>
+    <label class="sw">ยอดบิลจริงจากธนาคาร <input type="number" id="billAct" inputmode="decimal" min="0" step="any" placeholder="ว่าง = ใช้ยอดที่จดไว้" style="width:170px"></label>
     <label class="sw">วันตัดยอดบัตรวันที่ <input type="number" id="stDay" min="1" max="31" style="width:80px"> ของทุกเดือน</label>
     <p class="note">รายจ่ายที่รูดบัตรให้จดเป็นหมวด "Credit Card" รายการวันที่ตัดยอดจะนับเข้ารอบบิลใหม่ รายรับหมวดที่มีคำว่า Cashback จะถูกหักออกจากยอดในรอบบิลนั้นให้เอง</p>
   </div>
   <div id="cyc" hidden>
     <p class="note" id="cycInfo"></p>
+    <p class="note" id="cycBill"></p>
     <div class="cb"><i class="o" id="cycBar"></i></div>
     <p class="note" id="cycDay"></p>
     <p class="note" style="margin-bottom:6px">เงินที่เหลือในรอบนี้:</p>
@@ -99,7 +101,7 @@ body.bk{background:#f8d9d3}
 </section>
 
 <section class="card">
-  <h2>เพิ่มรายการ</h2>
+  <h2 id="fh">เพิ่มรายการ</h2>
   <div class="seg" role="group" aria-label="ประเภท">
     <button class="o on" id="tOut" type="button">รายจ่าย</button>
     <button class="i" id="tIn" type="button">รายรับ</button>
@@ -108,6 +110,7 @@ body.bk{background:#f8d9d3}
   <div class="row"><select id="cat" aria-label="หมวดหมู่"></select><input id="note" type="text" placeholder="โน้ต (ไม่บังคับ)" aria-label="โน้ต"></div>
   <div class="row" id="ncRow" hidden><input id="newcat" type="text" maxlength="30" placeholder="พิมพ์ชื่อหมวดหมู่ใหม่" aria-label="ชื่อหมวดหมู่ใหม่"></div>
   <button class="main" id="add" type="button">บันทึกรายการ</button>
+  <button id="cancelEdit" type="button" hidden style="width:100%;margin-top:8px">ยกเลิกการแก้ไข</button>
 </section>
 
 <section class="card">
@@ -139,6 +142,17 @@ body.bk{background:#f8d9d3}
 </section>
 
 <section class="card">
+  <h2>รายการผ่อน / รายจ่ายประจำ</h2>
+  <p class="note" style="margin-top:0">ใส่ครั้งเดียว แอปจะเพิ่มรายการให้เองทุกเดือนตามวันที่กำหนด (เพิ่มล่วงหน้าประมาณ 1 เดือน)</p>
+  <div class="row"><input id="iName" type="text" maxlength="40" placeholder="ชื่อ เช่น ผ่อนรถ" aria-label="ชื่อรายการผ่อน"><input id="iAmt" type="number" inputmode="decimal" min="0" step="any" placeholder="ยอดต่อเดือน" aria-label="ยอดต่อเดือน"></div>
+  <div class="row"><input id="iDay" type="number" inputmode="numeric" min="1" max="31" placeholder="ทุกวันที่" aria-label="วันที่ของทุกเดือน"><select id="iCat" aria-label="หมวดหมู่"></select></div>
+  <div class="row"><input id="iMon" type="number" inputmode="numeric" min="1" placeholder="จำนวนงวด" aria-label="จำนวนงวดทั้งหมด"><input id="iStart" type="month" aria-label="เริ่มเดือน"></div>
+  <p class="note" style="margin:0 0 8px">จำนวนงวดและเริ่มเดือน เว้นว่างได้ (ว่างงวด = ไม่จำกัด, ว่างเริ่มเดือน = เริ่มครั้งถัดไป)</p>
+  <button class="main" id="iAdd" type="button">เพิ่มรายการผ่อน</button>
+  <div id="instList" style="margin-top:10px"></div>
+</section>
+
+<section class="card">
   <h2>เตือนสำรองข้อมูลวันเงินเดือนออก</h2>
   <label class="sw">เงินเดือนออกวันที่ <input type="number" id="payDay" min="1" max="31" style="width:80px"> ของทุกเดือน</label>
   <p class="note" id="payInfo" style="margin-top:0"></p>
@@ -162,7 +176,7 @@ body.bk{background:#f8d9d3}
 <script>
 (function(){
 var KEY="ledger-v1",CC="Credit Card",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
-var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,startDate:"2026-10-22",hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
+var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,startDate:"2026-10-22",inst:[],bill:{},hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
 function load(){try{var r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 var $=function(i){return document.getElementById(i)};
@@ -172,12 +186,12 @@ function ck(){return type==="out"?"out":"inc"}
 function mine(){return (S.cats&&S.cats[ck()])||[]}
 function toggleNew(){$("ncRow").hidden=$("cat").value!=="__new"}
 function fillCats(){var s=$("cat");s.innerHTML="";CATS[ck()].concat(mine().filter(function(c){return CATS[ck()].indexOf(c)<0})).forEach(function(c){var o=document.createElement("option");o.textContent=c;s.appendChild(o)});
-  var o=document.createElement("option");o.value="__new";o.textContent="＋ พิมพ์หมวดหมู่เอง";s.appendChild(o);toggleNew()}
+  var o=document.createElement("option");o.value="__new";o.textContent="＋ พิมพ์หมวดหมู่เอง";s.appendChild(o);toggleNew();fillICat()}
 function setType(t){type=t;$("tOut").className="o"+(t==="out"?" on":"");$("tIn").className="i"+(t==="in"?" on":"");fillCats()}
 function render(){
   var r0=rng();
   $("mlabel").textContent=cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"});
-  var items=S.tx.filter(function(t){return t.date>=r0[0]&&t.date<r0[1]&&(S.view!=="b"||(t.type==="out"&&t.cat===CC)||(t.type==="in"&&/cashback/i.test(t.cat)))}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
+  var items=S.tx.filter(function(t){return t.date>=r0[0]&&t.date<r0[1]&&(S.view!=="b"||(t.type==="out"&&t.cat===CC)||isCB(t))&&(S.view!=="c"||!(t.type==="out"&&t.cat===CC)&&!isCB(t))}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
   var si=0,so=0;items.forEach(function(t){t.type==="in"?si+=t.amt:so+=t.amt});
   $("bal").textContent=baht(si-so);$("sin").textContent=baht(si);$("sout").textContent=baht(so);cycRender();
   var box=$("list");box.innerHTML="";
@@ -189,24 +203,32 @@ function render(){
       var tot=items.filter(function(x){return x.date===t.date}).reduce(function(a,x){return a+(x.type==="in"?x.amt:-x.amt)},0);
       d.innerHTML="<span></span><span></span>";d.children[0].textContent=new Date(t.date+"T00:00").toLocaleDateString("th-TH",{weekday:"long",day:"numeric",month:"short"});d.children[1].textContent=baht(tot);box.appendChild(d)}
     var r=document.createElement("div");r.className="tx";
-    r.innerHTML='<div class="t"><span></span><small></small></div><span class="a"></span><button type="button" aria-label="ลบรายการ">✕</button>';
+    r.innerHTML='<div class="t"><span></span><small></small></div><span class="a"></span><button type="button" class="ed" aria-label="แก้ไขรายการ">✎</button><button type="button" class="dl" aria-label="ลบรายการ">✕</button>';
     r.querySelector(".t span").textContent=t.cat;r.querySelector("small").textContent=t.note||"";
     var a=r.querySelector(".a");a.className="a "+(t.type==="in"?"i":"o");a.textContent=(t.type==="in"?"+":"−")+baht(t.amt);
-    r.querySelector("button").onclick=function(){if(confirm("ลบรายการนี้?")){S.tx=S.tx.filter(function(x){return x.id!==t.id});save();render();check()}};
+    r.querySelector(".ed").onclick=function(){startEdit(t)};
+    r.querySelector(".dl").onclick=function(){if(confirm("ลบรายการนี้?")){S.tx=S.tx.filter(function(x){return x.id!==t.id});if(editId===t.id)endEdit();save();render();check()}};
     box.appendChild(r)});
   chart();cats();
 }
 var cm="d",km="out";
 /*P1*/
+function isCB(x){return x.type==="in"&&/cashback/i.test(x.cat)}
+function billCalc(y,m){var a=iso(stDate(y,m-1)),b=iso(stDate(y,m)),g=0,c=0,o=S.bill&&S.bill[b.slice(0,7)];
+  S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out"&&x.cat===CC)g+=x.amt;else if(isCB(x))c+=x.amt}});
+  var has=typeof o==="number";return {a:a,b:b,gross:g,cb:c,sys:g-c,net:has?o:g-c,has:has}}
 function startOf(y,m){var p=payday(y,m),best=null;
   S.tx.forEach(function(t){if(t.type==="in"&&t.cat==="เงินเดือน"&&Math.abs(new Date(t.date+"T00:00")-p)/864e5<=10&&(!best||t.date<best))best=t.date});
   return best?new Date(best+"T00:00"):p}
 function dec(y,m){var k=iso(new Date(y,m,1)).slice(0,7);return (S.cyc&&S.cyc[k])||"carry"}
 function cyc(y,m,dep){dep=dep||0;
-  var f=startOf(y,m-1),t=startOf(y,m),sd=S.startDate||"",a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,carry:0,from:f,to:t,pre:false};
+  var f=startOf(y,m-1),t=startOf(y,m),sd=S.startDate||"",a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,card:0,bills:[],carry:0,from:f,to:t,pre:false};
   if(sd&&b<=sd){r.pre=true;r.rem=0;return r}
   if(sd&&a<sd){a=sd;r.from=new Date(sd+"T00:00")}
-  S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out")r.out+=x.amt;else if(x.cat==="เงินเดือน")r.sal+=x.amt;else r.oth+=x.amt}});
+  S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out"){if(x.cat!==CC)r.out+=x.amt}else if(x.cat==="เงินเดือน")r.sal+=x.amt;else if(!isCB(x))r.oth+=x.amt}});
+  var p0=iso(startOf(y,m-2)),p1=iso(startOf(y,m-1));
+  for(var i=m-3;i<=m;i++){var dd=iso(stDate(y,i));if(dd>p0&&dd<=p1){var bl=billCalc(y,i);r.card+=bl.net;r.bills.push({d:dd,net:bl.net,has:bl.has})}}
+  r.out+=r.card;
   var first=S.tx.reduce(function(z,x){return !z||x.date<z?x.date:z},"");
   var lim=first>sd?first:sd;
   if(first&&a>lim&&dep<36){var q=cyc(y,m-1,dep+1);r.carry=dec(y,m-1)==="save"?Math.min(0,q.rem):q.rem}
@@ -222,8 +244,8 @@ function cardRender(){
   S.tx.forEach(function(x){var ok=x.type==="out"&&x.cat===CC,k=x.type==="in"&&/cashback/i.test(x.cat);if(!ok&&!k)return;
     var now=x.date>=a&&x.date<b,pr=x.date>=pa&&x.date<a;if(ok){if(now){n++;tot+=x.amt}else if(pr)pv+=x.amt}else{if(now)cb+=x.amt;else if(pr)pcb+=x.amt}});
   $("mlabel").textContent="รอบบิล "+ds(f)+" – "+ds(new Date(t.getTime()-864e5));
-  $("bal").textContent=baht(tot-cb);
-  $("cardInfo").textContent=n+" รายการ ใช้จ่ายบัตร "+baht(tot)+(cb?" − Cashback "+baht(cb)+" = สุทธิ "+baht(tot-cb):"")+" ตัดยอดวันที่ "+ds(t)+(td>=f&&td<t?" (อีก "+Math.round((t-td)/864e5)+" วัน)":td>=t?" (ตัดยอดแล้ว)":"")+" รอบบิลก่อนหน้า (สุทธิ) "+baht(pv-pcb)}
+  var bl=billCalc(y,m);$("bal").textContent=baht(bl.net);if(document.activeElement!==$("billAct"))$("billAct").value=bl.has?bl.net:"";
+  $("cardInfo").textContent=n+" รายการ ใช้จ่ายบัตร "+baht(tot)+(cb?" − Cashback "+baht(cb)+" = สุทธิ "+baht(tot-cb):"")+" ตัดยอดวันที่ "+ds(t)+(td>=f&&td<t?" (อีก "+Math.round((t-td)/864e5)+" วัน)":td>=t?" (ตัดยอดแล้ว)":"")+" รอบบิลก่อนหน้า (สุทธิ) "+baht(pv-pcb)+(bl.has?" ใช้ยอดบิลจริงแทน (แอปคำนวณได้ "+baht(tot-cb)+")":"")}
 function setView(v){S.view=v;save();var n=new Date();cur=v==="c"?cycMonth():v==="b"?cardMonth():new Date(n.getFullYear(),n.getMonth(),1);render();if(v==="b"){setType("out");$("cat").value=CC}}
 function cycRender(){
   var cv=S.view==="c",cb=S.view==="b";$("cyc").hidden=!cv;$("cardp").hidden=!cb;document.querySelector(".split").hidden=cb;$("catCard").hidden=cb;
@@ -234,9 +256,10 @@ function cycRender(){
   var y=cur.getFullYear(),m=cur.getMonth(),c=cyc(y,m),tot=c.carry+c.sal+c.oth,end=new Date(c.to.getTime()-864e5),pc=tot>0?Math.round(c.out/tot*100):0,
     ds=function(d){return d.toLocaleDateString("th-TH",{day:"numeric",month:"short"})},td=new Date(iso(new Date())+"T00:00"),msg;
   $("mlabel").textContent="รอบใช้จ่ายเดือน"+cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"})+" ("+ds(c.from)+" – "+ds(end)+")";
-  if(c.pre){$("bal").textContent=baht(0);$("sin").textContent=baht(0);$("sout").textContent=baht(0);$("cycInfo").textContent="รอบนี้อยู่ก่อนวันเริ่มนับ ("+ds(new Date(S.startDate+"T00:00"))+") จึงไม่นำมาคำนวณ";$("cycBar").style.width="0%";$("cycDay").textContent="";return}
+  if(c.pre){$("bal").textContent=baht(0);$("sin").textContent=baht(0);$("sout").textContent=baht(0);$("cycInfo").textContent="รอบนี้อยู่ก่อนวันเริ่มนับ ("+ds(new Date(S.startDate+"T00:00"))+") จึงไม่นำมาคำนวณ";$("cycBar").style.width="0%";$("cycDay").textContent="";$("cycBill").textContent="";return}
   $("bal").textContent=baht(c.rem);$("sin").textContent=baht(c.sal+c.oth);$("sout").textContent=baht(c.out);
   $("cycInfo").textContent="ยอดยกมา "+baht(c.carry)+" + เงินเดือน "+baht(c.sal)+" + รายรับอื่น "+baht(c.oth);
+  $("cycBill").textContent=c.bills.length?"บิลบัตรเครดิตที่จ่ายด้วยเงินเดือนก้อนนี้: "+c.bills.map(function(b){return "ตัดยอด "+ds(new Date(b.d+"T00:00"))+" "+baht(b.net)+(b.has?" (ยอดจริง)":"")}).join(", "):"ไม่มีบิลบัตรเครดิตในรอบนี้";
   $("cycBar").style.width=Math.min(100,pc)+"%";
   if(td>=c.from&&td<c.to){var dl=Math.max(1,Math.round((c.to-td)/864e5));msg="ใช้ไปแล้ว "+pc+"% เหลืออีก "+dl+" วันก่อนเงินเดือนออก"+(c.rem>0?" ใช้ได้วันละ "+baht(c.rem/dl):" (เกินงบแล้ว)")}
   else msg=td<c.from?"ยังไม่ถึงรอบนี้":"รอบนี้จบแล้ว ใช้ไป "+pc+"%";
@@ -246,7 +269,8 @@ function cycRender(){
   $("saveTot").textContent="เงินเก็บสะสมจากรอบที่จบแล้ว: "+baht(sv)}
 function cats(){
   var r0=rng(),m={},tot=0,box=$("cats");
-  S.tx.forEach(function(t){if(t.date>=r0[0]&&t.date<r0[1]&&t.type===km){m[t.cat]=(m[t.cat]||0)+t.amt;tot+=t.amt}});
+  S.tx.forEach(function(t){if(t.date>=r0[0]&&t.date<r0[1]&&t.type===km&&!(S.view==="c"&&(t.cat===CC||isCB(t)))){m[t.cat]=(m[t.cat]||0)+t.amt;tot+=t.amt}});
+  if(S.view==="c"&&km==="out"){var cc=cyc(cur.getFullYear(),cur.getMonth());if(cc.card>0){m["บิลบัตรเครดิต"]=cc.card;tot+=cc.card}}
   box.innerHTML="";
   var ks=Object.keys(m).sort(function(a,b){return m[b]-m[a]});
   if(!ks.length)box.innerHTML='<div class="empty">ยังไม่มีรายการในเดือนนี้</div>';
@@ -274,14 +298,22 @@ function chart(){
   $("csum").textContent="รวม"+({d:" "+ml,w:" "+ml,m:" ปี "+yl,y:" 5 ปีถึง "+yl}[cm])+": รายรับ "+baht(ti)+", รายจ่าย "+baht(to)+", คงเหลือ "+baht(ti-to);
   document.querySelectorAll("#cmode button").forEach(function(btn){btn.className=btn.dataset.m===cm?"on":""});
 }
+var editId=null;
+function startEdit(t){editId=t.id;setType(t.type==="in"?"in":"out");
+  var s=$("cat");s.value=t.cat;if(s.value!==t.cat){var o=document.createElement("option");o.textContent=t.cat;s.insertBefore(o,s.lastChild);s.value=t.cat}
+  toggleNew();$("amt").value=t.amt;$("date").value=t.date;$("note").value=t.note||"";
+  $("fh").textContent="แก้ไขรายการ";$("add").textContent="บันทึกการแก้ไข";$("cancelEdit").hidden=false;
+  $("amt").scrollIntoView({block:"center"});$("amt").focus()}
+function endEdit(){editId=null;$("fh").textContent="เพิ่มรายการ";$("add").textContent="บันทึกรายการ";$("cancelEdit").hidden=true;$("date").value=iso(new Date())}
 function add(){
-  var v=parseFloat($("amt").value);if(!(v>0)){$("amt").focus();return}
+  var wasEdit=!!editId,v=parseFloat($("amt").value);if(!(v>0)){$("amt").focus();return}
   var cat=$("cat").value;
   if(cat==="__new"){cat=$("newcat").value.trim();if(!cat){$("newcat").focus();return}
     if(CATS[ck()].concat(mine()).indexOf(cat)<0){if(!S.cats)S.cats={out:[],inc:[]};S.cats[ck()].push(cat)}}
-  S.tx.push({id:Date.now(),type:type,amt:v,cat:cat,note:$("note").value.trim(),date:$("date").value||iso(new Date())});
+  var rec={id:Date.now(),type:type,amt:v,cat:cat,note:$("note").value.trim(),date:$("date").value||iso(new Date())};
+  if(editId){var ex=S.tx.filter(function(x){return x.id===editId})[0];if(ex){rec.id=ex.id;if(ex.rid)rec.rid=ex.rid;S.tx[S.tx.indexOf(ex)]=rec}else S.tx.push(rec)}else S.tx.push(rec);
   save();$("amt").value="";$("note").value="";$("newcat").value="";fillCats();$("cat").value=cat;toggleNew();
-  var d=new Date(S.tx[S.tx.length-1].date+"T00:00");if(S.view==="m")cur=new Date(d.getFullYear(),d.getMonth(),1);render();check();$("amt").focus();
+  var d=new Date(rec.date+"T00:00");if(S.view==="m")cur=new Date(d.getFullYear(),d.getMonth(),1);render();check();if(wasEdit)endEdit();else $("amt").focus();
 }
 function download(name,text,mime){var b=new Blob([text],{type:mime}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000)}
 function csv(){var q=function(s){return '"'+String(s).replace(/"/g,'""')+'"'};
@@ -311,7 +343,31 @@ function bkRender(){var n=new Date(),p=payday(n.getFullYear(),n.getMonth()),lp=l
 function holRender(){var b=$("holList");b.innerHTML="";(S.hol||[]).slice().sort().forEach(function(h){var s=document.createElement("button");s.type="button";
   s.textContent=new Date(h+"T00:00").toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})+" ✕";
   s.onclick=function(){S.hol=S.hol.filter(function(x){return x!==h});save();holRender();bkRender()};b.appendChild(s)})}
+var gn=0;
+function genInst(nowD){
+  var n=nowD||new Date(),hz=iso(new Date(n.getFullYear(),n.getMonth(),n.getDate()+31)),ch=false;
+  (S.inst||[]).forEach(function(q){
+    if(!q.gen)q.gen=[];var sy=+q.start.slice(0,4),sm=+q.start.slice(5,7)-1;
+    for(var k=0;(!q.months||k<q.months)&&k<120;k++){
+      var dim=new Date(sy,sm+k+1,0).getDate(),d=iso(new Date(sy,sm+k,Math.min(q.day,dim))),key=d.slice(0,7);
+      if(d>hz)break;
+      if(q.gen.indexOf(key)>=0)continue;
+      q.gen.push(key);ch=true;
+      if(!S.tx.some(function(t){return t.type==="out"&&t.date===d&&t.amt===q.amt&&t.cat===q.cat}))S.tx.push({id:Date.now()+(++gn),type:"out",amt:q.amt,cat:q.cat,note:q.name,date:d,rid:q.id});
+    }});
+  if(ch)save();return ch}
+function fillICat(){var s=$("iCat"),l=CATS.out.concat(((S.cats&&S.cats.out)||[]).filter(function(c){return CATS.out.indexOf(c)<0}));s.innerHTML="";l.forEach(function(c){var o=document.createElement("option");o.textContent=c;s.appendChild(o)})}
+function instRender(){var b=$("instList");b.innerHTML="";
+  if(!(S.inst||[]).length){b.innerHTML='<p class="note">ยังไม่มีรายการผ่อน</p>';return}
+  S.inst.forEach(function(q){var r=document.createElement("div");r.className="tx";
+    r.innerHTML='<div class="t"><span></span><small></small></div><span class="a o"></span><button type="button" aria-label="ลบรายการผ่อน">✕</button>';
+    r.querySelector(".t span").textContent=q.name;
+    r.querySelector("small").textContent="ทุกวันที่ "+q.day+" · "+q.cat+(q.months?" · เหลือ "+Math.max(0,q.months-(q.gen||[]).length)+" งวด":" · ไม่จำกัดงวด");
+    r.querySelector(".a").textContent=baht(q.amt);
+    r.querySelector("button").onclick=function(){if(confirm("ลบรายการผ่อนนี้? รายการที่เพิ่มไปแล้วจะอยู่ต่อ ส่วนที่ยังไม่ถึงวันที่จะถูกลบ")){var td=iso(new Date());S.tx=S.tx.filter(function(t){return !(t.rid===q.id&&t.date>td)});S.inst=S.inst.filter(function(x){return x.id!==q.id});save();instRender();render()}};
+    b.appendChild(r)})}
 function check(){
+  if(genInst())render();
   var today=iso(new Date()),logged=S.tx.some(function(t){return t.date===today});
   var now=new Date(),hm=("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2);
   var due=S.rOn&&!logged&&hm>=S.rTime;
@@ -320,7 +376,7 @@ function check(){
   var bd=bkRender();if(bd&&S.rOn&&S.bkNote!==today){S.bkNote=today;save();notify("เงินเดือนออกแล้ว อย่าลืมกดสำรองข้อมูล","backup")}
 }
 $("tOut").onclick=function(){setType("out")};$("tIn").onclick=function(){setType("in")};
-$("add").onclick=add;$("cat").onchange=function(){toggleNew();if(!$("ncRow").hidden)$("newcat").focus()};
+$("add").onclick=add;$("cancelEdit").onclick=function(){endEdit();$("amt").value="";$("note").value=""};$("cat").onchange=function(){toggleNew();if(!$("ncRow").hidden)$("newcat").focus()};
 document.querySelectorAll("#cmode button").forEach(function(b){b.onclick=function(){cm=b.dataset.m;chart()}});
 document.querySelectorAll("#kmode button").forEach(function(b){b.onclick=function(){km=b.dataset.k;cats()}});
 document.querySelectorAll("#vmode button").forEach(function(b){b.onclick=function(){setView(b.dataset.v)}});
@@ -336,12 +392,20 @@ function backup(){S.lastBackup=iso(new Date());save();download("สำรอง�
 $("exJson").onclick=backup;$("bkNow").onclick=backup;
 $("payDay").onchange=function(){var v=parseInt(this.value,10);S.payDay=v>=1&&v<=31?v:25;this.value=S.payDay;save();bkRender()};
 $("startD").onchange=function(){S.startDate=this.value||"";save();if(S.view==="c")cur=cycMonth();render()};
+$("billAct").onchange=function(){var k=iso(stDate(cur.getFullYear(),cur.getMonth())).slice(0,7),v=parseFloat(this.value);if(!S.bill)S.bill={};if(v>=0)S.bill[k]=v;else delete S.bill[k];save();render()};
 $("stDay").onchange=function(){var v=parseInt(this.value,10);S.stDay=v>=1&&v<=31?v:17;this.value=S.stDay;save();render()};
+$("iAdd").onclick=function(){var nm=$("iName").value.trim(),am=parseFloat($("iAmt").value),dy=parseInt($("iDay").value,10),mo=parseInt($("iMon").value,10)||0;
+  if(!nm){$("iName").focus();return}if(!(am>0)){$("iAmt").focus();return}if(!(dy>=1&&dy<=31)){$("iDay").focus();return}
+  var n=new Date(),st=$("iStart").value;
+  if(!st){st=iso(new Date(n.getFullYear(),n.getDate()>dy?n.getMonth()+1:n.getMonth(),1)).slice(0,7)}
+  if(!S.inst)S.inst=[];S.inst.push({id:Date.now(),name:nm,amt:am,day:dy,cat:$("iCat").value,months:mo>0?mo:0,start:st,gen:[]});
+  ["iName","iAmt","iDay","iMon","iStart"].forEach(function(i){$(i).value=""});
+  save();genInst();instRender();render()};
 $("holAdd").onclick=function(){var v=$("holDate").value;if(!v)return;if(!S.hol)S.hol=[];if(S.hol.indexOf(v)<0)S.hol.push(v);$("holDate").value="";save();holRender();bkRender()};
 $("imBtn").onclick=function(){$("imFile").click()};
 $("imFile").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();
   r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.tx))throw 0;if(confirm("นำเข้า "+d.tx.length+" รายการ? ข้อมูลปัจจุบันจะถูกแทนที่")){S=Object.assign(S,d);save();init()}}catch(e){alert("ไฟล์สำรองไม่ถูกต้อง")}};r.readAsText(f);this.value=""};
-function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());$("payDay").value=S.payDay||25;$("stDay").value=S.stDay||17;$("startD").value=S.startDate||"";holRender();if(S.view==="c")cur=cycMonth();else if(S.view==="b")cur=cardMonth();fillCats();render();check()}
+function init(){$("rOn").checked=!!S.rOn;$("rTime").value=S.rTime||"21:00";$("date").value=iso(new Date());$("payDay").value=S.payDay||25;$("stDay").value=S.stDay||17;$("startD").value=S.startDate||"";holRender();if(S.view==="c")cur=cycMonth();else if(S.view==="b")cur=cardMonth();fillCats();genInst();instRender();render();check()}
 function route(){var p=new URLSearchParams(location.search),a=p.get("add");
   if(a==="out"||a==="in"){setType(a);$("amt").scrollIntoView({block:"center"});$("amt").focus()}
   else if(p.get("view")==="chart")$("csvg").scrollIntoView({block:"center"})}
