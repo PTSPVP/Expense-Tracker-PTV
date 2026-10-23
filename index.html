@@ -81,6 +81,7 @@ body.bk{background:#f8d9d3}
   <div class="mon"><button id="prev" aria-label="เดือนก่อนหน้า">‹</button><strong id="mlabel"></strong><button id="next" aria-label="เดือนถัดไป">›</button></div>
   <div class="note" id="balLbl" style="margin:0">ยอดคงเหลือเดือนนี้</div><div class="bal" id="bal">฿0</div>
   <div class="split"><div class="i">รายรับ<b id="sin">฿0</b></div><div class="o">รายจ่าย<b id="sout">฿0</b></div></div>
+  <p class="note" id="svNote" style="margin:8px 0 0"></p>
   <div id="cardp" hidden>
     <p class="note" id="cardInfo"></p>
     <label class="sw">ยอดบิลจริงจากธนาคาร <input type="number" id="billAct" inputmode="decimal" min="0" step="any" placeholder="ว่าง = ใช้ยอดที่จดไว้" style="width:170px"></label>
@@ -92,8 +93,10 @@ body.bk{background:#f8d9d3}
     <p class="note" id="cycBill"></p>
     <div class="cb"><i class="o" id="cycBar"></i></div>
     <p class="note" id="cycDay"></p>
-    <p class="note" style="margin-bottom:6px">เงินที่เหลือในรอบนี้:</p>
-    <div class="seg neu" id="dmode" role="group" aria-label="เงินที่เหลือ"><button type="button" data-d="carry">ยกยอดไปรอบหน้า</button><button type="button" data-d="save">เข้าเงินเก็บ</button></div>
+    <p class="note" style="margin-bottom:6px">โอนเงินที่เหลือเข้าเงินเก็บ (บันทึกเป็นรายการหมวด "เงินเก็บ" วันนี้):</p>
+    <div class="row"><input type="number" id="svAmt" inputmode="decimal" min="0" step="any" placeholder="จำนวนที่โอน" aria-label="จำนวนที่โอนเข้าเงินเก็บ"><button type="button" id="svGo">โอนจำนวนนี้</button></div>
+    <button type="button" id="svAll" style="width:100%">โอนทั้งหมดที่เหลือ</button>
+    <p class="note" id="svInfo"></p>
     <p class="note" id="saveTot"></p>
     <label class="sw">เริ่มนับรอบเงินเดือนตั้งแต่วันที่ <input type="date" id="startD" style="width:auto"></label>
     <p class="note">ข้อมูลก่อนวันนี้ยังดูได้ในมุมมองเดือนปฏิทิน แต่ไม่นำมาคำนวณในรอบเงินเดือน (ลบวันที่ออกถ้าอยากนับทั้งหมด)</p>
@@ -175,8 +178,8 @@ body.bk{background:#f8d9d3}
 
 <script>
 (function(){
-var KEY="ledger-v1",CC="Credit Card",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
-var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,startDate:"2026-10-22",inst:[],bill:{},hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
+var KEY="ledger-v1",CC="Credit Card",SV="เงินเก็บ",CATS={out:["อาหาร","เดินทาง","ที่พัก","ของใช้","บันเทิง","สุขภาพ",CC,SV,"อื่น ๆ"],inc:["เงินเดือน","รายได้เสริม","อื่น ๆ"]};
+var S={tx:[],cats:{out:[],inc:[]},payDay:25,stDay:17,startDate:"2026-10-22",inst:[],bill:{},sv:{},hol:[],view:"m",cyc:{},lastBackup:"",bkNote:"",rOn:false,rTime:"21:00",last:""},type="out",cur=new Date();cur.setDate(1);
 function load(){try{var r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 var $=function(i){return document.getElementById(i)};
@@ -192,8 +195,8 @@ function render(){
   var r0=rng();
   $("mlabel").textContent=cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"});
   var items=S.tx.filter(function(t){return t.date>=r0[0]&&t.date<r0[1]&&(S.view!=="b"||(t.type==="out"&&t.cat===CC)||isCB(t))&&(S.view!=="c"||!(t.type==="out"&&t.cat===CC)&&!isCB(t))}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
-  var si=0,so=0;items.forEach(function(t){t.type==="in"?si+=t.amt:so+=t.amt});
-  $("bal").textContent=baht(si-so);$("sin").textContent=baht(si);$("sout").textContent=baht(so);cycRender();
+  var si=0,so=0,sv=0;items.forEach(function(t){if(isCB(t))so-=t.amt;else if(t.type==="in")si+=t.amt;else if(isSV(t))sv+=t.amt;else so+=t.amt});
+  $("bal").textContent=baht(si-so-sv);$("svNote").textContent=sv>0?"โอนเข้าเงินเก็บ "+baht(sv)+" (ไม่นับเป็นรายจ่าย แต่หักจากยอดคงเหลือ)":"";$("sin").textContent=baht(si);$("sout").textContent=baht(so);cycRender();
   var box=$("list");box.innerHTML="";
   var h=document.createElement("h2");h.textContent=S.view==="b"?"รายการบัตรเครดิตในรอบบิลนี้":"รายการเดือนนี้";box.appendChild(h);
   if(!items.length){var e=document.createElement("div");e.className="empty";e.textContent="ยังไม่มีรายการ เริ่มจดรายการแรกได้เลย";box.appendChild(e)}
@@ -213,6 +216,7 @@ function render(){
 }
 var cm="d",km="out";
 /*P1*/
+function isSV(x){return x.type==="out"&&x.cat===SV}
 function isCB(x){return x.type==="in"&&/cashback/i.test(x.cat)}
 function billCalc(y,m){var a=iso(stDate(y,m-1)),b=iso(stDate(y,m)),g=0,c=0,o=S.bill&&S.bill[b.slice(0,7)];
   S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out"&&x.cat===CC)g+=x.amt;else if(isCB(x))c+=x.amt}});
@@ -221,18 +225,19 @@ function startOf(y,m){var p=payday(y,m),best=null;
   S.tx.forEach(function(t){if(t.type==="in"&&t.cat==="เงินเดือน"&&Math.abs(new Date(t.date+"T00:00")-p)/864e5<=10&&(!best||t.date<best))best=t.date});
   return best?new Date(best+"T00:00"):p}
 function dec(y,m){var k=iso(new Date(y,m,1)).slice(0,7);return (S.cyc&&S.cyc[k])||"carry"}
+function savedOf(y,m,rem){var k=iso(new Date(y,m,1)).slice(0,7),v=S.sv&&S.sv[k];if(typeof v==="number")return Math.min(Math.max(0,v),Math.max(0,rem));return dec(y,m)==="save"?Math.max(0,rem):0}
 function cyc(y,m,dep){dep=dep||0;
-  var f=startOf(y,m-1),t=startOf(y,m),sd=S.startDate||"",a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,card:0,bills:[],carry:0,from:f,to:t,pre:false};
+  var f=startOf(y,m-1),t=startOf(y,m),sd=S.startDate||"",a=iso(f),b=iso(t),r={sal:0,oth:0,out:0,svT:0,card:0,bills:[],carry:0,from:f,to:t,pre:false};
   if(sd&&b<=sd){r.pre=true;r.rem=0;return r}
   if(sd&&a<sd){a=sd;r.from=new Date(sd+"T00:00")}
-  S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out"){if(x.cat!==CC)r.out+=x.amt}else if(x.cat==="เงินเดือน")r.sal+=x.amt;else if(!isCB(x))r.oth+=x.amt}});
+  S.tx.forEach(function(x){if(x.date>=a&&x.date<b){if(x.type==="out"){if(x.cat===SV)r.svT+=x.amt;else if(x.cat!==CC)r.out+=x.amt}else if(x.cat==="เงินเดือน")r.sal+=x.amt;else if(!isCB(x))r.oth+=x.amt}});
   var p0=iso(startOf(y,m-2)),p1=iso(startOf(y,m-1));
   for(var i=m-3;i<=m;i++){var dd=iso(stDate(y,i));if(dd>p0&&dd<=p1){var bl=billCalc(y,i);r.card+=bl.net;r.bills.push({d:dd,net:bl.net,has:bl.has})}}
   r.out+=r.card;
   var first=S.tx.reduce(function(z,x){return !z||x.date<z?x.date:z},"");
   var lim=first>sd?first:sd;
-  if(first&&a>lim&&dep<36){var q=cyc(y,m-1,dep+1);r.carry=dec(y,m-1)==="save"?Math.min(0,q.rem):q.rem}
-  r.rem=r.carry+r.sal+r.oth-r.out;return r}
+  if(first&&a>lim&&dep<36){var q=cyc(y,m-1,dep+1);r.carry=q.rem}
+  r.rem=r.carry+r.sal+r.oth-r.out-r.svT;return r}
 function rng(){var y=cur.getFullYear(),m=cur.getMonth();if(S.view==="b")return [iso(stDate(y,m-1)),iso(stDate(y,m))];if(S.view==="c"){var f=iso(startOf(y,m-1)),t=iso(startOf(y,m)),sd=S.startDate||"";if(sd&&t<=sd)return ["9","9"];return [f>sd?f:sd,t]}return [iso(cur),iso(new Date(y,m+1,1))]}
 function cycMonth(){var n=new Date(),y=n.getFullYear(),m=n.getMonth(),mm=iso(n)<iso(startOf(y,m))?m:m+1,sd=S.startDate||"";for(var i=0;sd&&i<12&&iso(startOf(y,mm))<=sd;i++)mm++;return new Date(y,mm,1)}
 /*P2*/
@@ -258,26 +263,29 @@ function cycRender(){
   $("mlabel").textContent="รอบใช้จ่ายเดือน"+cur.toLocaleDateString("th-TH",{month:"long",year:"numeric"})+" ("+ds(c.from)+" – "+ds(end)+")";
   if(c.pre){$("bal").textContent=baht(0);$("sin").textContent=baht(0);$("sout").textContent=baht(0);$("cycInfo").textContent="รอบนี้อยู่ก่อนวันเริ่มนับ ("+ds(new Date(S.startDate+"T00:00"))+") จึงไม่นำมาคำนวณ";$("cycBar").style.width="0%";$("cycDay").textContent="";$("cycBill").textContent="";return}
   $("bal").textContent=baht(c.rem);$("sin").textContent=baht(c.sal+c.oth);$("sout").textContent=baht(c.out);
-  $("cycInfo").textContent="ยอดยกมา "+baht(c.carry)+" + เงินเดือน "+baht(c.sal)+" + รายรับอื่น "+baht(c.oth);
+  $("cycInfo").textContent="ยอดยกมา "+baht(c.carry)+" + เงินเดือน "+baht(c.sal)+" + รายรับอื่น "+baht(c.oth)+(c.svT?" − โอนเข้าเงินเก็บ "+baht(c.svT):"");
   $("cycBill").textContent=c.bills.length?"บิลบัตรเครดิตที่จ่ายด้วยเงินเดือนก้อนนี้: "+c.bills.map(function(b){return "ตัดยอด "+ds(new Date(b.d+"T00:00"))+" "+baht(b.net)+(b.has?" (ยอดจริง)":"")}).join(", "):"ไม่มีบิลบัตรเครดิตในรอบนี้";
   $("cycBar").style.width=Math.min(100,pc)+"%";
   if(td>=c.from&&td<c.to){var dl=Math.max(1,Math.round((c.to-td)/864e5));msg="ใช้ไปแล้ว "+pc+"% เหลืออีก "+dl+" วันก่อนเงินเดือนออก"+(c.rem>0?" ใช้ได้วันละ "+baht(c.rem/dl):" (เกินงบแล้ว)")}
   else msg=td<c.from?"ยังไม่ถึงรอบนี้":"รอบนี้จบแล้ว ใช้ไป "+pc+"%";
   $("cycDay").textContent=msg;
-  var d=dec(y,m);document.querySelectorAll("#dmode button").forEach(function(b){b.className=b.dataset.d===d?"on":""});
-  var sv=0;for(var i=m+1;i>m-36;i--){var q=cyc(y,i);if(q.to>td)continue;if(dec(y,i)==="save")sv+=Math.max(0,q.rem)}
-  $("saveTot").textContent="เงินเก็บสะสมจากรอบที่จบแล้ว: "+baht(sv)}
+  $("svInfo").textContent="โอนเข้าเงินเก็บในรอบนี้ "+baht(c.svT)+(c.rem>0?" | เงินที่เหลือ "+baht(c.rem)+" จะยกยอดไปรอบหน้า":"");
+  var tr=0;S.tx.forEach(function(x){if(isSV(x)&&x.date<=iso(td))tr+=x.amt});
+  $("saveTot").textContent="เงินเก็บสะสมทั้งหมด (จากรายการโอนเข้าเงินเก็บ): "+baht(tr)}
 function cats(){
   var r0=rng(),m={},tot=0,box=$("cats");
-  S.tx.forEach(function(t){if(t.date>=r0[0]&&t.date<r0[1]&&t.type===km&&!(S.view==="c"&&(t.cat===CC||isCB(t)))){m[t.cat]=(m[t.cat]||0)+t.amt;tot+=t.amt}});
+  S.tx.forEach(function(t){if(!(t.date>=r0[0]&&t.date<r0[1]))return;var cb=isCB(t);
+    if(S.view==="c"&&(t.cat===CC||cb))return;
+    if(cb){if(km==="out"){m[t.cat]=(m[t.cat]||0)-t.amt;tot-=t.amt}return}
+    if(t.type===km){m[t.cat]=(m[t.cat]||0)+t.amt;tot+=t.amt}});
   if(S.view==="c"&&km==="out"){var cc=cyc(cur.getFullYear(),cur.getMonth());if(cc.card>0){m["บิลบัตรเครดิต"]=cc.card;tot+=cc.card}}
   box.innerHTML="";
   var ks=Object.keys(m).sort(function(a,b){return m[b]-m[a]});
   if(!ks.length)box.innerHTML='<div class="empty">ยังไม่มีรายการในเดือนนี้</div>';
-  ks.forEach(function(k){var r=document.createElement("div"),pc=m[k]/tot*100;r.className="cr";
+  ks.forEach(function(k){var r=document.createElement("div"),pc=tot>0?m[k]/tot*100:0;r.className="cr";
     r.innerHTML='<div><span></span><b></b></div><div class="cb"><i></i></div>';
     r.querySelector("span").textContent=k+" ("+Math.round(pc)+"%)";r.querySelector("b").textContent=baht(m[k]);
-    var i=r.querySelector("i");i.className=km==="out"?"o":"i";i.style.width=pc+"%";box.appendChild(r)});
+    var i=r.querySelector("i");i.className=km==="out"?"o":"i";i.style.width=Math.max(0,pc)+"%";box.appendChild(r)});
   $("ctitle").textContent="· "+$("mlabel").textContent;
   document.querySelectorAll("#kmode button").forEach(function(b){b.className=b.dataset.k===km?"on":""});
 }
@@ -287,7 +295,7 @@ function chart(){
   else if(cm==="w"){s=1;for(i=1;i<=dim;i++){if(i===dim||new Date(y,mo,i).getDay()===0){b.push([s===i?String(i):s+"-"+i,new Date(y,mo,s),new Date(y,mo,i+1)]);s=i+1}}}
   else if(cm==="m")for(i=0;i<12;i++){s=new Date(y,i,1);e=new Date(y,i+1,1);b.push([s.toLocaleDateString("th-TH",{month:"short"}),s,e])}
   else for(i=4;i>=0;i--){s=new Date(y-i,0,1);e=new Date(y-i+1,0,1);b.push([s.toLocaleDateString("th-TH",{year:"numeric"}),s,e])}
-  var vals=b.map(function(x){var a=iso(x[1]),z=iso(x[2]),r={i:0,o:0};S.tx.forEach(function(t){if(t.date>=a&&t.date<z)r[t.type==="in"?"i":"o"]+=t.amt});return r});
+  var vals=b.map(function(x){var a=iso(x[1]),z=iso(x[2]),r={i:0,o:0};S.tx.forEach(function(t){if(t.date>=a&&t.date<z&&!isSV(t))r[isCB(t)?"o":t.type==="in"?"i":"o"]+=isCB(t)?-t.amt:t.amt});return r});
   var mx=1,ti=0,to=0;vals.forEach(function(v){mx=Math.max(mx,v.i,v.o);ti+=v.i;to+=v.o});
   var W=560,H=220,pl=6,pt=20,pb=26,sl=(W-2*pl)/b.length,bw=Math.min(20,sl/2-2),ch=H-pt-pb,g="";
   b.forEach(function(x,k){var cx=pl+k*sl+sl/2,v=vals[k];
@@ -380,7 +388,7 @@ $("add").onclick=add;$("cancelEdit").onclick=function(){endEdit();$("amt").value
 document.querySelectorAll("#cmode button").forEach(function(b){b.onclick=function(){cm=b.dataset.m;chart()}});
 document.querySelectorAll("#kmode button").forEach(function(b){b.onclick=function(){km=b.dataset.k;cats()}});
 document.querySelectorAll("#vmode button").forEach(function(b){b.onclick=function(){setView(b.dataset.v)}});
-document.querySelectorAll("#dmode button").forEach(function(b){b.onclick=function(){if(!S.cyc)S.cyc={};S.cyc[iso(cur).slice(0,7)]=b.dataset.d;save();render()}});$("amt").onkeydown=function(e){if(e.key==="Enter")add()};
+$("amt").onkeydown=function(e){if(e.key==="Enter")add()};
 $("prev").onclick=function(){cur.setMonth(cur.getMonth()-1);render()};
 $("next").onclick=function(){cur.setMonth(cur.getMonth()+1);render()};
 $("rOn").onchange=function(){S.rOn=this.checked;save();if(S.rOn&&"Notification"in window&&Notification.permission==="default")Notification.requestPermission();check()};
@@ -393,6 +401,14 @@ $("exJson").onclick=backup;$("bkNow").onclick=backup;
 $("payDay").onchange=function(){var v=parseInt(this.value,10);S.payDay=v>=1&&v<=31?v:25;this.value=S.payDay;save();bkRender()};
 $("startD").onchange=function(){S.startDate=this.value||"";save();if(S.view==="c")cur=cycMonth();render()};
 $("billAct").onchange=function(){var k=iso(stDate(cur.getFullYear(),cur.getMonth())).slice(0,7),v=parseFloat(this.value);if(!S.bill)S.bill={};if(v>=0)S.bill[k]=v;else delete S.bill[k];save();render()};
+function svDo(amt){var c=cyc(cur.getFullYear(),cur.getMonth()),t=iso(new Date());
+  if(!(amt>0)){$("svAmt").focus();return}
+  if(c.pre||t<iso(c.from)||t>=iso(c.to)){alert("โอนได้เฉพาะรอบปัจจุบัน (วันนี้ต้องอยู่ในรอบนี้) เงินที่เหลือจากรอบก่อนถูกยกมารวมในรอบปัจจุบันให้แล้ว");return}
+  if(amt>c.rem+0.005){alert("จำนวนเกินเงินที่เหลือในรอบนี้ ("+baht(Math.max(0,c.rem))+")");return}
+  S.tx.push({id:Date.now()+(++gn),type:"out",amt:Math.round(amt*100)/100,cat:SV,note:"โอนเข้าเงินเก็บ",date:t});
+  $("svAmt").value="";save();render()}
+$("svGo").onclick=function(){svDo(parseFloat($("svAmt").value))};
+$("svAll").onclick=function(){var c=cyc(cur.getFullYear(),cur.getMonth());svDo(c.rem>0?Math.floor(c.rem*100)/100:0)};
 $("stDay").onchange=function(){var v=parseInt(this.value,10);S.stDay=v>=1&&v<=31?v:17;this.value=S.stDay;save();render()};
 $("iAdd").onclick=function(){var nm=$("iName").value.trim(),am=parseFloat($("iAmt").value),dy=parseInt($("iDay").value,10),mo=parseInt($("iMon").value,10)||0;
   if(!nm){$("iName").focus();return}if(!(am>0)){$("iAmt").focus();return}if(!(dy>=1&&dy<=31)){$("iDay").focus();return}
